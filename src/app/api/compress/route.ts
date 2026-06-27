@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
-const archiver = require("archiver");
-import { PassThrough } from "stream";
+import AdmZip from "adm-zip";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,24 +11,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
     }
 
-    const archive = archiver('zip', {
-      zlib: { level: 9 } // Maximum compression for the zip itself
-    });
-    
-    const passThrough = new PassThrough();
-    archive.pipe(passThrough);
-
-    // Convert PassThrough to a Web ReadableStream for Next.js Response
-    const stream = new ReadableStream({
-      start(controller) {
-        passThrough.on('data', (chunk) => controller.enqueue(chunk));
-        passThrough.on('end', () => controller.close());
-        passThrough.on('error', (err) => controller.error(err));
-      }
-    });
+    const zip = new AdmZip();
 
     // Process all images concurrently
-    Promise.all(files.map(async (file) => {
+    await Promise.all(files.map(async (file) => {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
@@ -49,26 +34,26 @@ export async function POST(req: NextRequest) {
           })
           .toBuffer();
           
-        archive.append(avifBuffer, { name: `${fileNameWithoutExt}.avif` });
+        zip.addFile(`${fileNameWithoutExt}.avif`, avifBuffer);
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);
+        throw err; // Re-throw to be caught by the outer catch
       }
-    })).then(() => {
-      // Finalize the archive once all images are appended
-      archive.finalize();
-    }).catch(err => {
-      console.error("Archive error:", err);
-      archive.abort();
-    });
+    }));
 
-    return new Response(stream, {
+    const zipBuffer = zip.toBuffer();
+
+    return new NextResponse(zipBuffer, {
       headers: {
         "Content-Type": "application/zip",
         "Content-Disposition": 'attachment; filename="compressed_images.zip"'
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Upload error:", error);
-    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Failed to process request",
+      details: error.message || String(error)
+    }, { status: 500 });
   }
 }
