@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
 
     const zip = new AdmZip();
 
-    // Process all images concurrently
-    await Promise.all(files.map(async (file) => {
+    // Process all images sequentially to prevent Out of Memory (OOM) errors
+    for (const file of files) {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         console.error(`Error processing file ${file.name}:`, err);
         throw err; // Re-throw to be caught by the outer catch
       }
-    }));
+    }
 
     const zipBuffer = zip.toBuffer();
 
