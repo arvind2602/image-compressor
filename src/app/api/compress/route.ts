@@ -22,14 +22,8 @@ export async function POST(req: NextRequest) {
         const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
         
         const avifBuffer = await sharp(buffer)
-          .resize({
-            width: 1920,
-            height: 1920,
-            fit: 'inside',
-            withoutEnlargement: true
-          })
           .avif({ 
-            quality: 60, 
+            quality: 85, 
             effort: 4 
           })
           .toBuffer();
