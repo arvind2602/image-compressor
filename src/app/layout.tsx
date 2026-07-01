@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   title: "Image Compressor — Convert & Crop to AVIF",
   description:
     "Enterprise-grade image compression, cropping, and AVIF conversion. Process images directly in your browser — no uploads stored.",
+  other: {
+    "theme-color": "#09090b",
+  },
 };
 
 export default function RootLayout({

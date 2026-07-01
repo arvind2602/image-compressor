@@ -9,8 +9,16 @@ import {
   Crop,
   Maximize2,
   SlidersHorizontal,
+  RotateCcw,
+  ImagePlus,
 } from "lucide-react";
 import { showToast } from "@/components/Toast";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 type AspectRatioPreset = "16:9" | "4:3" | "1:1" | "3:2" | "custom";
 
@@ -33,7 +41,8 @@ export default function CropTool() {
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [selectedRatio, setSelectedRatio] = useState<AspectRatioPreset>("16:9");
+  const [selectedRatio, setSelectedRatio] =
+    useState<AspectRatioPreset>("16:9");
   const [customRatio, setCustomRatio] = useState({ w: 5, h: 4 });
   const [zoom, setZoom] = useState(1);
   const [offsetX, setOffsetX] = useState(0);
@@ -43,6 +52,19 @@ export default function CropTool() {
 
   const cropContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const changeFileInputRef = useRef<HTMLInputElement>(null);
+  const editorWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (imageUrl && editorWrapperRef.current) {
+      setTimeout(() => {
+        editorWrapperRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 150);
+    }
+  }, [imageUrl]);
 
   const currentRatio =
     selectedRatio === "custom"
@@ -54,7 +76,7 @@ export default function CropTool() {
     setImageUrl(url);
     setImageFile(file);
 
-    const img = new Image();
+    const img = new window.Image();
     img.onload = () => {
       setImageNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
     };
@@ -93,20 +115,13 @@ export default function CropTool() {
       const imgW = imageNaturalSize.w * zoom;
       const imgH = imageNaturalSize.h * zoom;
 
-      let clampedX = x;
-      let clampedY = y;
+      const minX = Math.min(0, containerW - imgW);
+      const maxX = Math.max(0, containerW - imgW);
+      const minY = Math.min(0, containerH - imgH);
+      const maxY = Math.max(0, containerH - imgH);
 
-      if (imgW <= containerW) {
-        clampedX = (containerW - imgW) / 2;
-      } else {
-        clampedX = Math.max(-(imgW - containerW), Math.min(0, x));
-      }
-
-      if (imgH <= containerH) {
-        clampedY = (containerH - imgH) / 2;
-      } else {
-        clampedY = Math.max(-(imgH - containerH), Math.min(0, y));
-      }
+      const clampedX = Math.max(minX, Math.min(maxX, x));
+      const clampedY = Math.max(minY, Math.min(maxY, y));
 
       return { x: clampedX, y: clampedY };
     },
@@ -140,9 +155,10 @@ export default function CropTool() {
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!imageUrl) return;
     e.preventDefault();
+    e.currentTarget.focus();
     setIsDraggingImage(true);
     setDragStart({ x: e.clientX - offsetX, y: e.clientY - offsetY });
   };
@@ -199,6 +215,37 @@ export default function CropTool() {
     fitImageToContainer();
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!imageUrl) return;
+    const step = e.shiftKey ? 20 : 5;
+    let newX = offsetX;
+    let newY = offsetY;
+
+    switch (e.key) {
+      case "ArrowUp":
+        newY -= step;
+        e.preventDefault();
+        break;
+      case "ArrowDown":
+        newY += step;
+        e.preventDefault();
+        break;
+      case "ArrowLeft":
+        newX -= step;
+        e.preventDefault();
+        break;
+      case "ArrowRight":
+        newX += step;
+        e.preventDefault();
+        break;
+      default:
+        return;
+    }
+    const clamped = clampOffset(newX, newY);
+    setOffsetX(clamped.x);
+    setOffsetY(clamped.y);
+  };
+
   const handleCrop = async () => {
     if (!imageFile || !cropContainerRef.current) return;
     setIsProcessing(true);
@@ -234,14 +281,18 @@ export default function CropTool() {
       const a = document.createElement("a");
       a.href = url;
       const fileNameWithoutExt =
-        imageFile.name.substring(0, imageFile.name.lastIndexOf(".")) || imageFile.name;
+        imageFile.name.substring(0, imageFile.name.lastIndexOf(".")) ||
+        imageFile.name;
       a.download = `${fileNameWithoutExt}_cropped.avif`;
       document.body.appendChild(a);
       a.click();
       URL.revokeObjectURL(url);
       a.remove();
 
-      showToast("Image cropped and converted successfully", "success");
+      showToast(
+        `Cropped! ${formatFileSize(imageFile.size)} ➔ ${formatFileSize(blob.size)}`,
+        "success"
+      );
     } catch (error) {
       console.error(error);
       showToast("Something went wrong while processing the image.");
@@ -250,14 +301,18 @@ export default function CropTool() {
     }
   };
 
+  const qualityProgress = `${quality}%`;
+
   return (
     <div>
       {!imageUrl ? (
+        /* ─── Dropzone ─── */
         <div
-          className={`border-2 border-dashed rounded-xl p-16 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
-            ${isDragging
-              ? "border-accent bg-accent/10 scale-[1.02]"
-              : "border-border hover:border-accent/50 hover:bg-surface-hover"}`}
+          className={`relative rounded-xl p-14 flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer group border-2 border-dashed ${
+            isDragging
+              ? "border-accent bg-accent/[0.08] scale-[1.01]"
+              : "border-white/[0.08] hover:border-accent/40 hover:bg-white/[0.02]"
+          }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -270,37 +325,55 @@ export default function CropTool() {
             ref={fileInputRef}
             onChange={handleFileChange}
           />
-          <div className={`mb-5 p-4 rounded-full transition-all duration-300 ${isDragging ? "bg-accent/20 scale-110" : "bg-surface-hover group-hover:bg-accent/10 group-hover:scale-110"}`}>
+          <div
+            className={`mb-5 p-4 rounded-2xl transition-all duration-500 ${
+              isDragging
+                ? "bg-accent/20 scale-110 animate-pulse-glow"
+                : "bg-white/[0.04] group-hover:bg-accent/10 group-hover:scale-105"
+            }`}
+          >
             <UploadCloud
-              className={`w-12 h-12 transition-colors ${isDragging ? "text-accent" : "text-text-tertiary group-hover:text-accent"}`}
+              className={`w-12 h-12 transition-all duration-300 ${
+                isDragging
+                  ? "text-accent"
+                  : "text-text-tertiary group-hover:text-accent"
+              }`}
             />
           </div>
-          <p className="text-text-primary font-medium text-lg mb-1.5">
+          <p className="text-text-primary font-semibold text-lg mb-1.5">
             Drop an image here
           </p>
-          <p className="text-text-tertiary text-sm mb-6">or click to browse</p>
-          <span className="inline-flex items-center gap-1.5 text-xs text-text-tertiary bg-surface-hover px-3 py-1.5 rounded-full border border-border">
+          <p className="text-text-tertiary text-sm mb-5">or click to browse</p>
+          <span className="inline-flex items-center gap-2 text-xs text-text-tertiary bg-white/[0.04] px-4 py-1.5 rounded-full border border-white/[0.06]">
             JPG · PNG · WEBP · TIFF
           </span>
         </div>
       ) : (
-        <div className="flex gap-6 items-start">
-          {/* Crop Viewport */}
-          <div className="flex-1 min-w-0">
-            <div className="relative group/viewport">
+        /* ─── Crop Editor ─── */
+        <div ref={editorWrapperRef} className="flex flex-col lg:flex-row gap-5 animate-fade-in-up">
+          {/* Crop Viewport and CTA */}
+          <div className="flex-1 min-w-0 flex flex-col gap-5">
+            {/* Outer Wrapper Canvas */}
+            <div
+              className="relative w-full bg-[#0a0a0c] rounded-2xl overflow-hidden p-4 sm:p-12 lg:p-20 flex flex-col items-center justify-center group/viewport border border-white/[0.04] shadow-inner focus:outline-none focus:ring-2 focus:ring-accent/50"
+              tabIndex={0}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onWheel={handleWheel}
+              onKeyDown={handleKeyDown}
+            >
               <div
                 ref={cropContainerRef}
-                style={{ aspectRatio: `${currentRatio.w} / ${currentRatio.h}` }}
-                className={`w-full relative overflow-hidden rounded-xl bg-black/60 ring-1 transition-all select-none
-                  ${isDraggingImage
-                    ? "ring-accent/70 ring-2"
-                    : "ring-border group-hover/viewport:ring-border-hover"}`}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onWheel={handleWheel}
+                style={{
+                  aspectRatio: `${currentRatio.w} / ${currentRatio.h}`,
+                }}
+                className={`w-full relative transition-all select-none ${
+                  isDraggingImage ? "ring-accent/70 ring-2" : "ring-white/[0.15] ring-1"
+                }`}
               >
+                {/* Image */}
                 <img
                   src={imageUrl}
                   alt="Crop preview"
@@ -309,42 +382,102 @@ export default function CropTool() {
                     transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
                     transformOrigin: "0 0",
                   }}
-                  className={`absolute top-0 left-0 max-w-none transition-transform duration-75
-                    ${isDraggingImage ? "cursor-grabbing" : "cursor-grab"}`}
+                  className={`absolute top-0 left-0 max-w-none transition-transform duration-75 ${
+                    isDraggingImage ? "cursor-grabbing" : "cursor-grab"
+                  }`}
                 />
 
+                {/* Dark Mask for cut-off parts using box-shadow */}
+                <div className="absolute inset-0 shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] pointer-events-none z-10" />
+
+                {/* Vignette overlay on hover */}
                 {!isDraggingImage && (
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none opacity-0 group-hover/viewport:opacity-100 transition-opacity" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/10 pointer-events-none opacity-0 group-hover/viewport:opacity-100 transition-opacity duration-300 z-10" />
                 )}
 
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute left-[33.33%] top-0 bottom-0 w-px bg-white/10" />
-                  <div className="absolute left-[66.66%] top-0 bottom-0 w-px bg-white/10" />
-                  <div className="absolute top-[33.33%] left-0 right-0 h-px bg-white/10" />
-                  <div className="absolute top-[66.66%] left-0 right-0 h-px bg-white/10" />
-                  <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-accent/50 rounded-tl" />
-                  <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-accent/50 rounded-tr" />
-                  <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-accent/50 rounded-bl" />
-                  <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-accent/50 rounded-br" />
+                {/* Rule of thirds grid (clipped to crop box) */}
+                <div className="absolute inset-0 pointer-events-none opacity-40 group-hover/viewport:opacity-60 transition-opacity overflow-hidden z-10">
+                  <div className="absolute left-[33.33%] top-0 bottom-0 w-px bg-white/15" />
+                  <div className="absolute left-[66.66%] top-0 bottom-0 w-px bg-white/15" />
+                  <div className="absolute top-[33.33%] left-0 right-0 h-px bg-white/15" />
+                  <div className="absolute top-[66.66%] left-0 right-0 h-px bg-white/15" />
                 </div>
 
-                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-md text-[11px] text-text-tertiary font-mono pointer-events-none">
-                  {Math.round(zoom * 100)}%
+                {/* Corner brackets */}
+                <div className="absolute inset-0 pointer-events-none z-10">
+                  <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-accent/40 rounded-tl transition-all duration-300 group-hover/viewport:border-accent/80 group-hover/viewport:w-8 group-hover/viewport:h-8" />
+                  <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-accent/40 rounded-tr transition-all duration-300 group-hover/viewport:border-accent/80 group-hover/viewport:w-8 group-hover/viewport:h-8" />
+                  <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-accent/40 rounded-bl transition-all duration-300 group-hover/viewport:border-accent/80 group-hover/viewport:w-8 group-hover/viewport:h-8" />
+                  <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-accent/40 rounded-br transition-all duration-300 group-hover/viewport:border-accent/80 group-hover/viewport:w-8 group-hover/viewport:h-8" />
                 </div>
-
-                {!isDraggingImage && (
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full text-[11px] text-text-tertiary pointer-events-none opacity-0 group-hover/viewport:opacity-100 transition-opacity whitespace-nowrap">
-                    Drag to reposition · Ctrl+Scroll to zoom
-                  </div>
-                )}
               </div>
+
+              {/* Zoom badge (moved to wrapper so it's always in corner) */}
+              <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[11px] text-text-tertiary font-mono pointer-events-none border border-white/[0.06] z-20">
+                {Math.round(zoom * 100)}%
+              </div>
+
+              {/* Help hint (moved to wrapper) */}
+              {!isDraggingImage && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full text-[11px] text-text-tertiary pointer-events-none opacity-0 group-hover/viewport:opacity-100 transition-opacity duration-300 whitespace-nowrap border border-white/[0.06] z-20">
+                  Drag to reposition · Ctrl+Scroll to zoom
+                </div>
+              )}
+            </div>
+
+            {/* ─── CTA below image ─── */}
+            <div className="w-full flex flex-col items-center mt-2">
+              <button
+                onClick={handleCrop}
+                disabled={isProcessing}
+                className={`group/btn relative w-full max-w-md h-12 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2.5 overflow-hidden transition-all duration-300 ${
+                  isProcessing
+                    ? "bg-accent/40 cursor-not-allowed"
+                    : "bg-gradient-to-r from-violet-600 via-accent to-purple-700 hover:shadow-[0_0_24px_rgba(124,58,237,0.45)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
+                }`}
+              >
+                {/* Shimmer overlay */}
+                {!isProcessing && (
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.12] to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 ease-in-out" />
+                )}
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Crop className="w-4 h-4" />
+                    Crop & Download
+                  </>
+                )}
+              </button>
+              <p className="text-center text-[11px] text-text-tertiary leading-relaxed mt-2">
+                Drag to reposition · Ctrl+Scroll to zoom
+              </p>
             </div>
           </div>
 
-          {/* Controls Sidebar */}
-          <div className="w-64 shrink-0 space-y-3">
+          {/* ─── Controls Sidebar ─── */}
+          <div className="w-full lg:w-56 shrink-0 space-y-3">
+            {/* Change Image */}
+            <button
+              onClick={() => changeFileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-medium text-text-tertiary bg-white/[0.03] border border-white/[0.06] hover:border-accent/20 hover:text-text-secondary transition-all duration-200"
+            >
+              <ImagePlus className="w-3.5 h-3.5" />
+              Change Image
+            </button>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={changeFileInputRef}
+              onChange={handleFileChange}
+            />
+
             {/* Aspect Ratio */}
-            <div className="bg-surface-hover rounded-xl p-4 border border-border">
+            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
               <div className="flex items-center gap-2 mb-3">
                 <Maximize2 className="w-3.5 h-3.5 text-accent" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
@@ -356,15 +489,17 @@ export default function CropTool() {
                   <button
                     key={preset.label}
                     onClick={() => setSelectedRatio(preset.label)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       selectedRatio === preset.label
-                        ? "bg-accent/15 text-accent border border-accent/30"
+                        ? "bg-accent/15 text-accent border border-accent/30 scale-[1.02]"
                         : "text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] border border-transparent"
                     }`}
                   >
                     <span
-                      className={`rounded shrink-0 transition-all ${
-                        selectedRatio === preset.label ? "border-accent" : "border-border-hover"
+                      className={`rounded shrink-0 transition-all duration-200 ${
+                        selectedRatio === preset.label
+                          ? "border-accent"
+                          : "border-white/[0.15]"
                       }`}
                       style={{
                         width: getRatioDimensions(preset.w, preset.h, 12).w,
@@ -377,9 +512,9 @@ export default function CropTool() {
                 ))}
                 <button
                   onClick={() => setSelectedRatio("custom")}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     selectedRatio === "custom"
-                      ? "bg-accent/15 text-accent border border-accent/30"
+                      ? "bg-accent/15 text-accent border border-accent/30 scale-[1.02]"
                       : "text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] border border-transparent"
                   }`}
                 >
@@ -388,7 +523,7 @@ export default function CropTool() {
                 </button>
               </div>
               {selectedRatio === "custom" && (
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/[0.06]">
                   <input
                     type="number"
                     min={1}
@@ -400,9 +535,11 @@ export default function CropTool() {
                         w: Math.max(1, parseInt(e.target.value) || 1),
                       }))
                     }
-                    className="w-full px-2.5 py-1.5 bg-white/5 border border-border rounded-lg text-text-primary text-xs text-center focus:outline-none focus:border-accent/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full px-2.5 py-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg text-text-primary text-xs text-center focus:outline-none focus:border-accent/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
-                  <span className="text-text-tertiary text-xs">:</span>
+                  <span className="text-text-tertiary text-xs font-medium">
+                    :
+                  </span>
                   <input
                     type="number"
                     min={1}
@@ -414,14 +551,14 @@ export default function CropTool() {
                         h: Math.max(1, parseInt(e.target.value) || 1),
                       }))
                     }
-                    className="w-full px-2.5 py-1.5 bg-white/5 border border-border rounded-lg text-text-primary text-xs text-center focus:outline-none focus:border-accent/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-full px-2.5 py-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg text-text-primary text-xs text-center focus:outline-none focus:border-accent/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
               )}
             </div>
 
             {/* Zoom */}
-            <div className="bg-surface-hover rounded-xl p-4 border border-border">
+            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <ZoomIn className="w-3.5 h-3.5 text-accent" />
@@ -431,17 +568,18 @@ export default function CropTool() {
                 </div>
                 <button
                   onClick={handleResetFit}
-                  className="text-[11px] text-text-tertiary hover:text-text-secondary transition-colors"
+                  className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-accent transition-colors"
                   title="Fit to view"
                 >
+                  <RotateCcw className="w-3 h-3" />
                   Reset
                 </button>
               </div>
               <div className="flex items-center gap-2 mb-2">
                 <button
-                  onClick={() => handleZoomChange(zoom - 0.1)}
+                  onClick={() => handleZoomChange(zoom - 0.01)}
                   disabled={zoom <= 0.1}
-                  className="p-1.5 rounded-md bg-white/5 border border-border text-text-tertiary hover:text-text-secondary hover:bg-white/10 disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+                  className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
@@ -449,9 +587,9 @@ export default function CropTool() {
                   {Math.round(zoom * 100)}%
                 </div>
                 <button
-                  onClick={() => handleZoomChange(zoom + 0.1)}
+                  onClick={() => handleZoomChange(zoom + 0.01)}
                   disabled={zoom >= 5}
-                  className="p-1.5 rounded-md bg-white/5 border border-border text-text-tertiary hover:text-text-secondary hover:bg-white/10 disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+                  className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
                 </button>
@@ -461,17 +599,20 @@ export default function CropTool() {
                 min={10}
                 max={500}
                 value={Math.round(zoom * 100)}
-                onChange={(e) => handleZoomChange(parseInt(e.target.value) / 100)}
-                className="w-full accent-accent h-1 rounded-full appearance-none bg-white/10 cursor-pointer
-                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
-                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent
-                  [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(124,58,237,0.4)]
-                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent/30"
+                onChange={(e) =>
+                  handleZoomChange(parseInt(e.target.value) / 100)
+                }
+                className="styled-range w-full"
+                style={
+                  {
+                    "--range-progress": `${((Math.round(zoom * 100) - 10) / (500 - 10)) * 100}%`,
+                  } as React.CSSProperties
+                }
               />
             </div>
 
             {/* Quality */}
-            <div className="bg-surface-hover rounded-xl p-4 border border-border">
+            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
@@ -479,7 +620,9 @@ export default function CropTool() {
                     Quality
                   </span>
                 </div>
-                <span className="text-xs text-accent font-mono">{quality}</span>
+                <span className="text-sm font-mono font-semibold text-accent tabular-nums">
+                  {quality}
+                </span>
               </div>
               <input
                 type="range"
@@ -487,43 +630,18 @@ export default function CropTool() {
                 max={100}
                 value={quality}
                 onChange={(e) => setQuality(parseInt(e.target.value))}
-                className="w-full accent-accent h-1 rounded-full appearance-none bg-white/10 cursor-pointer
-                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
-                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent
-                  [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(124,58,237,0.4)]
-                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent/30"
+                className="styled-range w-full"
+                style={
+                  {
+                    "--range-progress": qualityProgress,
+                  } as React.CSSProperties
+                }
               />
-              <div className="flex justify-between text-[11px] text-text-tertiary mt-1.5">
+              <div className="flex justify-between text-[11px] text-text-tertiary mt-2">
                 <span>Smaller</span>
                 <span>Better</span>
               </div>
             </div>
-
-            <button
-              onClick={handleCrop}
-              disabled={isProcessing}
-              className={`w-full h-11 rounded-xl font-medium text-sm text-white transition-all flex items-center justify-center gap-2
-                ${isProcessing
-                  ? "bg-accent/40 cursor-not-allowed"
-                  : "bg-accent hover:bg-accent-hover active:scale-[0.98]"
-                }`}
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Crop className="w-4 h-4" />
-                  Crop & Download
-                </>
-              )}
-            </button>
-
-            <p className="text-center text-[11px] text-text-tertiary leading-relaxed">
-              Drag to reposition · Ctrl+Scroll to zoom
-            </p>
           </div>
         </div>
       )}
