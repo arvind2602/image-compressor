@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
 
     const fileNameWithoutExt =
       image.name.substring(0, image.name.lastIndexOf(".")) || image.name;
+    const safeName = fileNameWithoutExt.replace(/[^\x20-\x7E]/g, "_");
 
     const avifBuffer = await sharp(buffer)
       .extract({ left, top, width, height })
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(new Uint8Array(avifBuffer), {
       headers: {
         "Content-Type": "image/avif",
-        "Content-Disposition": `attachment; filename="${fileNameWithoutExt}_cropped.avif"`,
+        "Content-Disposition": `attachment; filename="${safeName}_cropped.avif"`,
       },
     });
   } catch (error: any) {

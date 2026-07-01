@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { UploadCloud, Image as ImageIcon, Loader2, X, FileArchive } from "lucide-react";
+import { UploadCloud, Image as ImageIcon, Loader2, X, FileArchive, SlidersHorizontal } from "lucide-react";
+import { showToast } from "@/components/Toast";
 
 export default function CompressTool() {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [quality, setQuality] = useState(85);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -45,6 +47,7 @@ export default function CompressTool() {
     files.forEach((file) => {
       formData.append("images", file);
     });
+    formData.append("quality", quality.toString());
 
     try {
       const response = await fetch("/api/compress", {
@@ -67,19 +70,22 @@ export default function CompressTool() {
       a.remove();
 
       setFiles([]);
+      showToast(`Compressed ${files.length} file${files.length > 1 ? "s" : ""} successfully`, "success");
     } catch (error) {
       console.error(error);
-      alert("Something went wrong while processing images.");
+      showToast("Something went wrong while processing images.");
     } finally {
       setIsUploading(false);
     }
   };
 
   return (
-    <>
+    <div>
       <div
-        className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
-          ${isDragging ? "border-purple-500 bg-purple-500/10 scale-[1.02]" : "border-white/20 hover:border-purple-400/50 hover:bg-white/5"}`}
+        className={`border-2 border-dashed rounded-xl p-14 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
+          ${isDragging
+            ? "border-accent bg-accent/10 scale-[1.02]"
+            : "border-border hover:border-accent/50 hover:bg-surface-hover"}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -93,72 +99,97 @@ export default function CompressTool() {
           ref={fileInputRef}
           onChange={handleFileChange}
         />
-        <div className="bg-white/5 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform duration-300">
+        <div className={`mb-4 p-4 rounded-full transition-all duration-300 ${isDragging ? "bg-accent/20 scale-110" : "bg-surface-hover group-hover:bg-accent/10 group-hover:scale-110"}`}>
           <UploadCloud
-            className={`w-10 h-10 ${isDragging ? "text-purple-400" : "text-gray-400 group-hover:text-purple-400"}`}
+            className={`w-10 h-10 transition-colors ${isDragging ? "text-accent" : "text-text-tertiary group-hover:text-accent"}`}
           />
         </div>
-        <p className="text-white font-semibold text-xl mb-2">Click to upload or drag and drop</p>
-        <p className="text-gray-400 text-sm">Supports JPG, PNG, WEBP, and TIFF</p>
+        <p className="text-text-primary font-medium text-lg mb-1">
+          Drop images here
+        </p>
+        <p className="text-text-tertiary text-sm">or click to browse · JPG, PNG, WEBP, TIFF</p>
       </div>
 
       {files.length > 0 && (
-        <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-200">
-              Selected Files{" "}
-              <span className="text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded-md ml-2">
-                {files.length}
-              </span>
+        <div className="mt-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-text-secondary">
+              {files.length} file{files.length > 1 ? "s" : ""} selected
             </h3>
           </div>
-          <ul className="max-h-60 overflow-y-auto space-y-2 mb-8 pr-2 custom-scrollbar">
+
+          <ul className="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
             {files.map((file, idx) => (
               <li
                 key={idx}
-                className="flex items-center justify-between bg-white/5 px-4 py-3 rounded-xl border border-white/5 hover:border-white/10 transition-colors"
+                className="flex items-center justify-between bg-surface-hover px-3.5 py-2.5 rounded-lg border border-border hover:border-border-hover transition-colors"
               >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <ImageIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="truncate text-sm text-gray-300">{file.name}</span>
+                <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                  <ImageIcon className="w-4 h-4 text-text-tertiary shrink-0" />
+                  <span className="truncate text-sm text-text-secondary">{file.name}</span>
                 </div>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFile(idx);
-                  }}
-                  className="text-gray-500 hover:text-red-400 hover:bg-red-400/10 p-1.5 rounded-lg transition-colors"
-                  title="Remove"
+                  onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                  className="shrink-0 text-text-tertiary hover:text-danger hover:bg-danger/10 p-1 rounded transition-colors"
+                  aria-label={`Remove ${file.name}`}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </li>
             ))}
           </ul>
 
+          <div className="bg-surface-hover rounded-xl p-4 border border-border">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                  Quality
+                </span>
+              </div>
+              <span className="text-xs text-accent font-mono">{quality}</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={100}
+              value={quality}
+              onChange={(e) => setQuality(parseInt(e.target.value))}
+              className="w-full accent-accent h-1 rounded-full appearance-none bg-white/10 cursor-pointer
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent
+                [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(124,58,237,0.4)]
+                [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent/30"
+            />
+            <div className="flex justify-between text-[11px] text-text-tertiary mt-1.5">
+              <span>Smaller file</span>
+              <span>Better quality</span>
+            </div>
+          </div>
+
           <button
             onClick={handleUpload}
             disabled={isUploading}
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 text-lg
+            className={`w-full h-11 rounded-xl font-medium text-sm text-white transition-all flex items-center justify-center gap-2
               ${isUploading
-                ? "bg-purple-500/50 cursor-not-allowed"
-                : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_40px_rgba(168,85,247,0.6)] hover:-translate-y-1"
+                ? "bg-accent/40 cursor-not-allowed"
+                : "bg-accent hover:bg-accent-hover active:scale-[0.98]"
               }`}
           >
             {isUploading ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
                 Compressing...
               </>
             ) : (
               <>
-                <FileArchive className="w-5 h-5" />
-                Compress & Download Zip
+                <FileArchive className="w-4 h-4" />
+                Compress & Download
               </>
             )}
           </button>
         </div>
       )}
-    </>
+    </div>
   );
 }

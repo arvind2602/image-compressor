@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { UploadCloud, Loader2, ZoomIn, ZoomOut, Crop } from "lucide-react";
+import {
+  UploadCloud,
+  Loader2,
+  ZoomIn,
+  ZoomOut,
+  Crop,
+  Maximize2,
+  SlidersHorizontal,
+} from "lucide-react";
+import { showToast } from "@/components/Toast";
 
 type AspectRatioPreset = "16:9" | "4:3" | "1:1" | "3:2" | "custom";
 
@@ -11,6 +20,11 @@ const PRESETS: { label: AspectRatioPreset; w: number; h: number }[] = [
   { label: "1:1", w: 1, h: 1 },
   { label: "3:2", w: 3, h: 2 },
 ];
+
+function getRatioDimensions(w: number, h: number, maxHeight: number) {
+  const scale = maxHeight / Math.max(w, h);
+  return { w: Math.round(w * scale), h: Math.round(h * scale) };
+}
 
 export default function CropTool() {
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -181,6 +195,10 @@ export default function CropTool() {
     setOffsetY(clamped.y);
   };
 
+  const handleResetFit = () => {
+    fitImageToContainer();
+  };
+
   const handleCrop = async () => {
     if (!imageFile || !cropContainerRef.current) return;
     setIsProcessing(true);
@@ -222,9 +240,11 @@ export default function CropTool() {
       a.click();
       URL.revokeObjectURL(url);
       a.remove();
+
+      showToast("Image cropped and converted successfully", "success");
     } catch (error) {
       console.error(error);
-      alert("Something went wrong while processing the image.");
+      showToast("Something went wrong while processing the image.");
     } finally {
       setIsProcessing(false);
     }
@@ -234,8 +254,10 @@ export default function CropTool() {
     <div>
       {!imageUrl ? (
         <div
-          className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
-            ${isDragging ? "border-purple-500 bg-purple-500/10 scale-[1.02]" : "border-white/20 hover:border-purple-400/50 hover:bg-white/5"}`}
+          className={`border-2 border-dashed rounded-xl p-16 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
+            ${isDragging
+              ? "border-accent bg-accent/10 scale-[1.02]"
+              : "border-border hover:border-accent/50 hover:bg-surface-hover"}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -248,200 +270,261 @@ export default function CropTool() {
             ref={fileInputRef}
             onChange={handleFileChange}
           />
-          <div className="bg-white/5 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform duration-300">
+          <div className={`mb-5 p-4 rounded-full transition-all duration-300 ${isDragging ? "bg-accent/20 scale-110" : "bg-surface-hover group-hover:bg-accent/10 group-hover:scale-110"}`}>
             <UploadCloud
-              className={`w-10 h-10 ${isDragging ? "text-purple-400" : "text-gray-400 group-hover:text-purple-400"}`}
+              className={`w-12 h-12 transition-colors ${isDragging ? "text-accent" : "text-text-tertiary group-hover:text-accent"}`}
             />
           </div>
-          <p className="text-white font-semibold text-xl mb-2">Click to upload or drag and drop</p>
-          <p className="text-gray-400 text-sm">Select an image to crop, compress & convert to AVIF</p>
+          <p className="text-text-primary font-medium text-lg mb-1.5">
+            Drop an image here
+          </p>
+          <p className="text-text-tertiary text-sm mb-6">or click to browse</p>
+          <span className="inline-flex items-center gap-1.5 text-xs text-text-tertiary bg-surface-hover px-3 py-1.5 rounded-full border border-border">
+            JPG · PNG · WEBP · TIFF
+          </span>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="flex gap-6 items-start">
           {/* Crop Viewport */}
-          <div
-            ref={cropContainerRef}
-            style={{ aspectRatio: `${currentRatio.w} / ${currentRatio.h}` }}
-            className="w-full relative overflow-hidden rounded-xl bg-black/40 border-2 border-purple-500/30 select-none"
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
-          >
-            <img
-              src={imageUrl}
-              alt="Crop preview"
-              draggable={false}
-              style={{
-                transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
-                transformOrigin: "0 0",
-              }}
-              className={`absolute top-0 left-0 max-w-none ${isDraggingImage ? "cursor-grabbing" : "cursor-grab"}`}
-            />
+          <div className="flex-1 min-w-0">
+            <div className="relative group/viewport">
+              <div
+                ref={cropContainerRef}
+                style={{ aspectRatio: `${currentRatio.w} / ${currentRatio.h}` }}
+                className={`w-full relative overflow-hidden rounded-xl bg-black/60 ring-1 transition-all select-none
+                  ${isDraggingImage
+                    ? "ring-accent/70 ring-2"
+                    : "ring-border group-hover/viewport:ring-border-hover"}`}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onWheel={handleWheel}
+              >
+                <img
+                  src={imageUrl}
+                  alt="Crop preview"
+                  draggable={false}
+                  style={{
+                    transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
+                    transformOrigin: "0 0",
+                  }}
+                  className={`absolute top-0 left-0 max-w-none transition-transform duration-75
+                    ${isDraggingImage ? "cursor-grabbing" : "cursor-grab"}`}
+                />
 
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute left-[33.33%] top-0 bottom-0 w-px bg-white/15" />
-              <div className="absolute left-[66.66%] top-0 bottom-0 w-px bg-white/15" />
-              <div className="absolute top-[33.33%] left-0 right-0 h-px bg-white/15" />
-              <div className="absolute top-[66.66%] left-0 right-0 h-px bg-white/15" />
-              <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-purple-400/60 rounded-tl" />
-              <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-purple-400/60 rounded-tr" />
-              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-purple-400/60 rounded-bl" />
-              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-purple-400/60 rounded-br" />
-            </div>
+                {!isDraggingImage && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none opacity-0 group-hover/viewport:opacity-100 transition-opacity" />
+                )}
 
-            <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-lg text-xs text-gray-300 pointer-events-none">
-              {Math.round(zoom * 100)}%
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute left-[33.33%] top-0 bottom-0 w-px bg-white/10" />
+                  <div className="absolute left-[66.66%] top-0 bottom-0 w-px bg-white/10" />
+                  <div className="absolute top-[33.33%] left-0 right-0 h-px bg-white/10" />
+                  <div className="absolute top-[66.66%] left-0 right-0 h-px bg-white/10" />
+                  <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-accent/50 rounded-tl" />
+                  <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-accent/50 rounded-tr" />
+                  <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-accent/50 rounded-bl" />
+                  <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-accent/50 rounded-br" />
+                </div>
+
+                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-md text-[11px] text-text-tertiary font-mono pointer-events-none">
+                  {Math.round(zoom * 100)}%
+                </div>
+
+                {!isDraggingImage && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full text-[11px] text-text-tertiary pointer-events-none opacity-0 group-hover/viewport:opacity-100 transition-opacity whitespace-nowrap">
+                    Drag to reposition · Ctrl+Scroll to zoom
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Aspect Ratio */}
-          <div>
-            <label className="text-sm text-gray-400 mb-2 block">Aspect Ratio</label>
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map((preset) => (
+          {/* Controls Sidebar */}
+          <div className="w-64 shrink-0 space-y-3">
+            {/* Aspect Ratio */}
+            <div className="bg-surface-hover rounded-xl p-4 border border-border">
+              <div className="flex items-center gap-2 mb-3">
+                <Maximize2 className="w-3.5 h-3.5 text-accent" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                  Ratio
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => setSelectedRatio(preset.label)}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      selectedRatio === preset.label
+                        ? "bg-accent/15 text-accent border border-accent/30"
+                        : "text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] border border-transparent"
+                    }`}
+                  >
+                    <span
+                      className={`rounded shrink-0 transition-all ${
+                        selectedRatio === preset.label ? "border-accent" : "border-border-hover"
+                      }`}
+                      style={{
+                        width: getRatioDimensions(preset.w, preset.h, 12).w,
+                        height: getRatioDimensions(preset.w, preset.h, 12).h,
+                        borderWidth: 1.5,
+                      }}
+                    />
+                    {preset.label}
+                  </button>
+                ))}
                 <button
-                  key={preset.label}
-                  onClick={() => setSelectedRatio(preset.label)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
-                    selectedRatio === preset.label
-                      ? "bg-purple-600 text-white border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]"
-                      : "bg-white/5 text-gray-300 border-white/10 hover:border-purple-400/30 hover:text-white"
+                  onClick={() => setSelectedRatio("custom")}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    selectedRatio === "custom"
+                      ? "bg-accent/15 text-accent border border-accent/30"
+                      : "text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] border border-transparent"
                   }`}
                 >
-                  {preset.label}
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  Custom
                 </button>
-              ))}
-              <button
-                onClick={() => setSelectedRatio("custom")}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
-                  selectedRatio === "custom"
-                    ? "bg-purple-600 text-white border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]"
-                    : "bg-white/5 text-gray-300 border-white/10 hover:border-purple-400/30 hover:text-white"
-                }`}
-              >
-                Custom
-              </button>
-            </div>
-            {selectedRatio === "custom" && (
-              <div className="flex items-center gap-2 mt-3">
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={customRatio.w}
-                  onChange={(e) =>
-                    setCustomRatio((prev) => ({
-                      ...prev,
-                      w: Math.max(1, parseInt(e.target.value) || 1),
-                    }))
-                  }
-                  className="w-20 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm text-center focus:outline-none focus:border-purple-500"
-                />
-                <span className="text-gray-400 text-sm">:</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={customRatio.h}
-                  onChange={(e) =>
-                    setCustomRatio((prev) => ({
-                      ...prev,
-                      h: Math.max(1, parseInt(e.target.value) || 1),
-                    }))
-                  }
-                  className="w-20 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm text-center focus:outline-none focus:border-purple-500"
-                />
               </div>
-            )}
-          </div>
+              {selectedRatio === "custom" && (
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={customRatio.w}
+                    onChange={(e) =>
+                      setCustomRatio((prev) => ({
+                        ...prev,
+                        w: Math.max(1, parseInt(e.target.value) || 1),
+                      }))
+                    }
+                    className="w-full px-2.5 py-1.5 bg-white/5 border border-border rounded-lg text-text-primary text-xs text-center focus:outline-none focus:border-accent/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-text-tertiary text-xs">:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={customRatio.h}
+                    onChange={(e) =>
+                      setCustomRatio((prev) => ({
+                        ...prev,
+                        h: Math.max(1, parseInt(e.target.value) || 1),
+                      }))
+                    }
+                    className="w-full px-2.5 py-1.5 bg-white/5 border border-border rounded-lg text-text-primary text-xs text-center focus:outline-none focus:border-accent/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+              )}
+            </div>
 
-          {/* Zoom */}
-          <div>
-            <label className="text-sm text-gray-400 mb-2 block">Zoom</label>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-8">
-                {(zoom * 100).toFixed(0)}%
-              </span>
+            {/* Zoom */}
+            <div className="bg-surface-hover rounded-xl p-4 border border-border">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <ZoomIn className="w-3.5 h-3.5 text-accent" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                    Zoom
+                  </span>
+                </div>
+                <button
+                  onClick={handleResetFit}
+                  className="text-[11px] text-text-tertiary hover:text-text-secondary transition-colors"
+                  title="Fit to view"
+                >
+                  Reset
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  onClick={() => handleZoomChange(zoom - 0.1)}
+                  disabled={zoom <= 0.1}
+                  className="p-1.5 rounded-md bg-white/5 border border-border text-text-tertiary hover:text-text-secondary hover:bg-white/10 disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <div className="flex-1 text-center text-sm text-text-secondary font-mono tabular-nums">
+                  {Math.round(zoom * 100)}%
+                </div>
+                <button
+                  onClick={() => handleZoomChange(zoom + 0.1)}
+                  disabled={zoom >= 5}
+                  className="p-1.5 rounded-md bg-white/5 border border-border text-text-tertiary hover:text-text-secondary hover:bg-white/10 disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <input
                 type="range"
                 min={10}
                 max={500}
                 value={Math.round(zoom * 100)}
                 onChange={(e) => handleZoomChange(parseInt(e.target.value) / 100)}
-                className="flex-1 accent-purple-500 h-1.5 rounded-full appearance-none bg-white/10 cursor-pointer
-                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 
-                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-500 
-                  [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(168,85,247,0.5)]
-                  [&::-webkit-slider-thumb]:cursor-pointer"
+                className="w-full accent-accent h-1 rounded-full appearance-none bg-white/10 cursor-pointer
+                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent
+                  [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(124,58,237,0.4)]
+                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent/30"
               />
-              <button
-                onClick={() => handleZoomChange(zoom - 0.1)}
-                disabled={zoom <= 0.1}
-                className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleZoomChange(zoom + 0.1)}
-                disabled={zoom >= 5}
-                className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
             </div>
-          </div>
 
-          {/* Quality */}
-          <div>
-            <label className="text-sm text-gray-400 mb-2 block">
-              Quality <span className="text-purple-400">{quality}</span>
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={100}
-              value={quality}
-              onChange={(e) => setQuality(parseInt(e.target.value))}
-              className="w-full accent-purple-500 h-1.5 rounded-full appearance-none bg-white/10 cursor-pointer
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 
-                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-500 
-                [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(168,85,247,0.5)]
-                [&::-webkit-slider-thumb]:cursor-pointer"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Smaller</span>
-              <span>Better Quality</span>
+            {/* Quality */}
+            <div className="bg-surface-hover rounded-xl p-4 border border-border">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-accent" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                    Quality
+                  </span>
+                </div>
+                <span className="text-xs text-accent font-mono">{quality}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={quality}
+                onChange={(e) => setQuality(parseInt(e.target.value))}
+                className="w-full accent-accent h-1 rounded-full appearance-none bg-white/10 cursor-pointer
+                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent
+                  [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(124,58,237,0.4)]
+                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent/30"
+              />
+              <div className="flex justify-between text-[11px] text-text-tertiary mt-1.5">
+                <span>Smaller</span>
+                <span>Better</span>
+              </div>
             </div>
+
+            <button
+              onClick={handleCrop}
+              disabled={isProcessing}
+              className={`w-full h-11 rounded-xl font-medium text-sm text-white transition-all flex items-center justify-center gap-2
+                ${isProcessing
+                  ? "bg-accent/40 cursor-not-allowed"
+                  : "bg-accent hover:bg-accent-hover active:scale-[0.98]"
+                }`}
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Crop className="w-4 h-4" />
+                  Crop & Download
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-[11px] text-text-tertiary leading-relaxed">
+              Drag to reposition · Ctrl+Scroll to zoom
+            </p>
           </div>
-
-          <button
-            onClick={handleCrop}
-            disabled={isProcessing}
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 text-lg
-              ${isProcessing
-                ? "bg-purple-500/50 cursor-not-allowed"
-                : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_40px_rgba(168,85,247,0.6)] hover:-translate-y-1"
-              }`}
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Crop className="w-5 h-5" />
-                Crop & Download AVIF
-              </>
-            )}
-          </button>
-
-          <p className="text-center text-gray-500 text-xs">
-            Drag image to reposition &bull; Ctrl+Scroll to zoom &bull; Rule of thirds
-            guides
-          </p>
         </div>
       )}
     </div>

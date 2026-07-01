@@ -6,32 +6,30 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const files = formData.getAll("images") as File[];
-    
+    const quality = parseInt(formData.get("quality") as string) || 85;
+
     if (!files || files.length === 0) {
       return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
     }
 
     const zip = new AdmZip();
 
-    // Process all images sequentially to prevent Out of Memory (OOM) errors
     for (const file of files) {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        
-        const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-        
+
+        const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+        const safeName = fileNameWithoutExt.replace(/[^\x20-\x7E]/g, "_");
+
         const avifBuffer = await sharp(buffer)
-          .avif({ 
-            quality: 85, 
-            effort: 4 
-          })
+          .avif({ quality, effort: 4 })
           .toBuffer();
-          
-        zip.addFile(`${fileNameWithoutExt}.avif`, avifBuffer);
+
+        zip.addFile(`${safeName}.avif`, avifBuffer);
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);
-        throw err; // Re-throw to be caught by the outer catch
+        throw err;
       }
     }
 
