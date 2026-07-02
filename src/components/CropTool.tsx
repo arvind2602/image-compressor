@@ -269,9 +269,13 @@ export default function CropTool() {
         img.onerror = reject;
       });
 
+      // AVIF YUV420 encoding requires even dimensions.
+      const safeWidth = crop.width & ~1;
+      const safeHeight = crop.height & ~1;
+
       const canvas = document.createElement("canvas");
-      canvas.width = crop.width;
-      canvas.height = crop.height;
+      canvas.width = safeWidth;
+      canvas.height = safeHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Could not get canvas context");
 
@@ -280,15 +284,15 @@ export default function CropTool() {
         img,
         crop.left,
         crop.top,
-        crop.width,
-        crop.height,
+        safeWidth,
+        safeHeight,
         0,
         0,
-        crop.width,
-        crop.height
+        safeWidth,
+        safeHeight
       );
 
-      const imageData = ctx.getImageData(0, 0, crop.width, crop.height);
+      const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
 
       // Dynamically import to avoid SSR issues
       const { default: encodeAvif, init: initAvif } = await import("@jsquash/avif/encode");

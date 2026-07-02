@@ -92,14 +92,18 @@ export default function CompressTool() {
         });
         URL.revokeObjectURL(url);
 
+        // AVIF YUV420 encoding requires even dimensions.
+        const safeWidth = img.width & ~1;
+        const safeHeight = img.height & ~1;
+
         const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = safeWidth;
+        canvas.height = safeHeight;
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error("Could not get canvas context");
         
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, safeWidth, safeHeight);
+        const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
 
         // Encode to AVIF
         const avifBuffer = await encodeAvif(imageData, { quality });
