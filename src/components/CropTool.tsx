@@ -182,7 +182,7 @@ export default function CropTool() {
     if (!imageUrl || !cropContainerRef.current) return;
 
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    const newZoom = Math.max(0.1, Math.min(5, zoom + delta));
+    const newZoom = Math.max(0.1, Math.min(5, Math.round((zoom + delta) * 100) / 100));
 
     const rect = cropContainerRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -590,7 +590,7 @@ export default function CropTool() {
               </div>
               <div className="flex items-center gap-2 mb-2">
                 <button
-                  onClick={() => handleZoomChange(zoom - 0.01)}
+                  onClick={() => handleZoomChange(Math.round((zoom - 0.01) * 100) / 100)}
                   disabled={zoom <= 0.1}
                   className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
@@ -600,7 +600,7 @@ export default function CropTool() {
                   {Math.round(zoom * 100)}%
                 </div>
                 <button
-                  onClick={() => handleZoomChange(zoom + 0.01)}
+                  onClick={() => handleZoomChange(Math.round((zoom + 0.01) * 100) / 100)}
                   disabled={zoom >= 5}
                   className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
