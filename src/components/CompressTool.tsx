@@ -71,13 +71,16 @@ export default function CompressTool() {
     setIsUploading(true);
 
     try {
-      // Dynamically import JSZip and JSquash to avoid SSR issues
+      // Force single-threaded mode to avoid Web Worker / SharedArrayBuffer issues
       const { default: JSZip } = await import("jszip");
-      const { default: encodeAvif, init: initAvif } = await import("@jsquash/avif/encode");
+      const { default: avifEncoder } = await import("@jsquash/avif/codec/enc/avif_enc.js");
+      const { initEmscriptenModule } = await import("@jsquash/avif/utils.js");
+      const { defaultOptions } = await import("@jsquash/avif/meta.js");
       
       // Initialize WASM
-      // @ts-ignore - The types expect 0-1 arguments but the JS function accepts 2
-      await initAvif(undefined, { locateFile: (path: string) => `/wasm/${path}` });
+      const emscriptenModule = await initEmscriptenModule(avifEncoder, undefined, { 
+        locateFile: (path: string) => `/wasm/${path}` 
+      });
 
       const zip = new JSZip();
 
@@ -105,8 +108,17 @@ export default function CompressTool() {
         ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, safeWidth, safeHeight);
         const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
 
+        const _options = { ...defaultOptions, quality };
+        const pixelData = new Uint8Array(
+          imageData.data.buffer,
+          imageData.data.byteOffset,
+          imageData.data.byteLength
+        );
+
         // Encode to AVIF
-        const avifBuffer = await encodeAvif(imageData, { quality });
+        const output = emscriptenModule.encode(pixelData, safeWidth, safeHeight, _options);
+        if (!output) throw new Error(`AVIF Encoding failed for ${file.name}`);
+        const avifBuffer = output.buffer;
         
         const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
         const safeName = fileNameWithoutExt.replace(/[^\x20-\x7E]/g, "_");

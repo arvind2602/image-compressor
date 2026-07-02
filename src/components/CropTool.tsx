@@ -294,15 +294,28 @@ export default function CropTool() {
 
       const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
 
-      // Dynamically import to avoid SSR issues
-      const { default: encodeAvif, init: initAvif } = await import("@jsquash/avif/encode");
-      
-      // Initialize with explicit path to the WASM files we copied to public/wasm
-      // @ts-ignore - The types expect 0-1 arguments but the JS function accepts 2
-      await initAvif(undefined, { locateFile: (path: string) => `/wasm/${path}` });
+      // Force single-threaded mode to avoid Web Worker / SharedArrayBuffer issues
+      const { default: avifEncoder } = await import("@jsquash/avif/codec/enc/avif_enc.js");
+      const { initEmscriptenModule } = await import("@jsquash/avif/utils.js");
+      const { defaultOptions } = await import("@jsquash/avif/meta.js");
 
-      // Encode directly on the client!
-      const avifBuffer = await encodeAvif(imageData, { quality });
+      // Initialize the module directly
+      const emscriptenModule = await initEmscriptenModule(avifEncoder, undefined, { 
+        locateFile: (path: string) => `/wasm/${path}` 
+      });
+
+      const _options = { ...defaultOptions, quality };
+      
+      // We must slice the buffer to avoid passing a view over a larger ArrayBuffer if byteOffset > 0
+      const pixelData = new Uint8Array(
+        imageData.data.buffer, 
+        imageData.data.byteOffset, 
+        imageData.data.byteLength
+      );
+      
+      const output = emscriptenModule.encode(pixelData, safeWidth, safeHeight, _options);
+      if (!output) throw new Error("AVIF Encoding failed internally.");
+      const avifBuffer = output.buffer;
       const blob = new Blob([avifBuffer], { type: "image/avif" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
