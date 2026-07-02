@@ -304,7 +304,8 @@ export default function CropTool() {
         locateFile: (path: string) => `/wasm/${path}` 
       });
 
-      const _options = { ...defaultOptions, quality };
+      // subsample: 0 ensures YUV444 which avoids chroma subsampling crashes
+      const _options = { ...defaultOptions, quality, subsample: 0 };
       
       // We must slice the buffer to avoid passing a view over a larger ArrayBuffer if byteOffset > 0
       const pixelData = new Uint8Array(
@@ -314,7 +315,9 @@ export default function CropTool() {
       );
       
       const output = emscriptenModule.encode(pixelData, safeWidth, safeHeight, _options);
-      if (!output) throw new Error("AVIF Encoding failed internally.");
+      if (!output) {
+        throw new Error("AVIF Encoding failed internally. Image might be too complex or large for browser memory.");
+      }
       const avifBuffer = output.buffer;
       const blob = new Blob([avifBuffer], { type: "image/avif" });
       const url = URL.createObjectURL(blob);

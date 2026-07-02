@@ -95,9 +95,16 @@ export default function CompressTool() {
         });
         URL.revokeObjectURL(url);
 
-        // AVIF YUV420 encoding requires even dimensions.
-        const safeWidth = img.width & ~1;
-        const safeHeight = img.height & ~1;
+        // Calculate scale down if image is too large (prevents WASM Out of Memory crashes)
+        const MAX_DIM = 2560;
+        let scale = 1;
+        if (img.width > MAX_DIM || img.height > MAX_DIM) {
+          scale = Math.min(MAX_DIM / img.width, MAX_DIM / img.height);
+        }
+
+        // AVIF YUV420 encoding requires even dimensions. We also apply the scale.
+        const safeWidth = Math.round(img.width * scale) & ~1;
+        const safeHeight = Math.round(img.height * scale) & ~1;
 
         const canvas = document.createElement("canvas");
         canvas.width = safeWidth;
@@ -108,7 +115,8 @@ export default function CompressTool() {
         ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, safeWidth, safeHeight);
         const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
 
-        const _options = { ...defaultOptions, quality };
+        // subsample: 0 ensures YUV444 which avoids chroma subsampling crashes
+        const _options = { ...defaultOptions, quality, subsample: 0 };
         const pixelData = new Uint8Array(
           imageData.data.buffer,
           imageData.data.byteOffset,
@@ -117,7 +125,9 @@ export default function CompressTool() {
 
         // Encode to AVIF
         const output = emscriptenModule.encode(pixelData, safeWidth, safeHeight, _options);
-        if (!output) throw new Error(`AVIF Encoding failed for ${file.name}`);
+        if (!output) {
+          throw new Error(`AVIF Encoding failed for ${file.name}. Image might be too complex or large for browser memory.`);
+        }
         const avifBuffer = output.buffer;
         
         const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
