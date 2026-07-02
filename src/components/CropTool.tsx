@@ -247,7 +247,7 @@ export default function CropTool() {
   };
 
   const handleCrop = async () => {
-    if (!imageFile || !cropContainerRef.current) return;
+    if (!imageFile || !cropContainerRef.current || !imageUrl) return;
     setIsProcessing(true);
 
     const containerW = cropContainerRef.current.clientWidth;
@@ -260,23 +260,45 @@ export default function CropTool() {
       height: Math.round(Math.min(imageNaturalSize.h, containerH / zoom)),
     };
 
-    const formData = new FormData();
-    formData.append("image", imageFile);
-    formData.append("left", crop.left.toString());
-    formData.append("top", crop.top.toString());
-    formData.append("width", crop.width.toString());
-    formData.append("height", crop.height.toString());
-    formData.append("quality", quality.toString());
-
     try {
-      const response = await fetch("/api/crop", {
-        method: "POST",
-        body: formData,
+      // Create a canvas to crop the image client-side to save upload bandwidth and avoid Vercel 4.5MB limit
+      const img = new window.Image();
+      img.src = imageUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
       });
 
-      if (!response.ok) throw new Error("Failed to crop image");
+      const canvas = document.createElement("canvas");
+      canvas.width = crop.width;
+      canvas.height = crop.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not get canvas context");
 
-      const blob = await response.blob();
+      // Draw the cropped portion
+      ctx.drawImage(
+        img,
+        crop.left,
+        crop.top,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        crop.width,
+        crop.height
+      );
+
+      const imageData = ctx.getImageData(0, 0, crop.width, crop.height);
+
+      // Dynamically import to avoid SSR issues
+      const { default: encodeAvif, init: initAvif } = await import("@jsquash/avif/encode");
+      
+      // Initialize with explicit path to the WASM files we copied to public/wasm
+      await initAvif(undefined, { locateFile: (path: string) => `/wasm/${path}` });
+
+      // Encode directly on the client!
+      const avifBuffer = await encodeAvif(imageData, { quality });
+      const blob = new Blob([avifBuffer], { type: "image/avif" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -293,9 +315,9 @@ export default function CropTool() {
         `Cropped! ${formatFileSize(imageFile.size)} ➔ ${formatFileSize(blob.size)}`,
         "success"
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showToast("Something went wrong while processing the image.");
+      showToast(error.message || "Something went wrong while processing the image.");
     } finally {
       setIsProcessing(false);
     }

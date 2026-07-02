@@ -70,30 +70,54 @@ export default function CompressTool() {
     if (files.length === 0) return;
     setIsUploading(true);
 
-    const formData = new FormData();
-    files.forEach((file) => {
-      formData.append("images", file);
-    });
-    formData.append("quality", quality.toString());
-
     try {
-      const response = await fetch("/api/compress", {
-        method: "POST",
-        body: formData,
-      });
+      // Dynamically import JSZip and JSquash to avoid SSR issues
+      const { default: JSZip } = await import("jszip");
+      const { default: encodeAvif, init: initAvif } = await import("@jsquash/avif/encode");
+      
+      // Initialize WASM
+      await initAvif(undefined, { locateFile: (path: string) => `/wasm/${path}` });
 
-      if (!response.ok) {
-        throw new Error("Failed to compress images");
+      const zip = new JSZip();
+
+      for (const file of files) {
+        // Load image onto a canvas to get ImageData
+        const img = new window.Image();
+        const url = URL.createObjectURL(file);
+        img.src = url;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+        URL.revokeObjectURL(url);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Could not get canvas context");
+        
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Encode to AVIF
+        const avifBuffer = await encodeAvif(imageData, { quality });
+        
+        const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+        const safeName = fileNameWithoutExt.replace(/[^\x20-\x7E]/g, "_");
+        
+        zip.file(`${safeName}.avif`, avifBuffer);
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const downloadUrl = window.URL.createObjectURL(zipBlob);
+      
       const a = document.createElement("a");
-      a.href = url;
+      a.href = downloadUrl;
       a.download = "compressed_images.zip";
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(downloadUrl);
       a.remove();
 
       // Revoke all thumbnail URLs
@@ -105,9 +129,9 @@ export default function CompressTool() {
         "success"
       );
       setTimeout(() => setShowSuccess(false), 4000);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showToast("Something went wrong while processing images.");
+      showToast(error.message || "Something went wrong while processing images.");
     } finally {
       setIsUploading(false);
     }
