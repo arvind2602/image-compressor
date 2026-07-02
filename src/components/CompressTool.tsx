@@ -76,6 +76,7 @@ export default function CompressTool() {
       const { default: encodeAvif, init: initAvif } = await import("@jsquash/avif/encode");
       
       // Initialize WASM
+      // @ts-ignore - The types expect 0-1 arguments but the JS function accepts 2
       await initAvif(undefined, { locateFile: (path: string) => `/wasm/${path}` });
 
       const zip = new JSZip();

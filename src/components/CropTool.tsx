@@ -294,6 +294,7 @@ export default function CropTool() {
       const { default: encodeAvif, init: initAvif } = await import("@jsquash/avif/encode");
       
       // Initialize with explicit path to the WASM files we copied to public/wasm
+      // @ts-ignore - The types expect 0-1 arguments but the JS function accepts 2
       await initAvif(undefined, { locateFile: (path: string) => `/wasm/${path}` });
 
       // Encode directly on the client!
