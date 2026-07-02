@@ -71,73 +71,26 @@ export default function CompressTool() {
     setIsUploading(true);
 
     try {
-      // Force single-threaded mode to avoid Web Worker / SharedArrayBuffer issues
-      const { default: JSZip } = await import("jszip");
-      const { default: avifEncoder } = await import("@jsquash/avif/codec/enc/avif_enc.js");
-      const { initEmscriptenModule } = await import("@jsquash/avif/utils.js");
-      const { defaultOptions } = await import("@jsquash/avif/meta.js");
-      
-      // Initialize WASM
-      const emscriptenModule = await initEmscriptenModule(avifEncoder, undefined, { 
-        locateFile: (path: string) => `/wasm/${path}` 
-      });
-
-      const zip = new JSZip();
+      const formData = new FormData();
 
       for (const file of files) {
-        // Load image onto a canvas to get ImageData
-        const img = new window.Image();
-        const url = URL.createObjectURL(file);
-        img.src = url;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-        });
-        URL.revokeObjectURL(url);
-
-        // Calculate scale down if image is too large (prevents WASM Out of Memory crashes)
-        const MAX_DIM = 2560;
-        let scale = 1;
-        if (img.width > MAX_DIM || img.height > MAX_DIM) {
-          scale = Math.min(MAX_DIM / img.width, MAX_DIM / img.height);
-        }
-
-        // AVIF YUV420 encoding requires even dimensions. We also apply the scale.
-        const safeWidth = Math.round(img.width * scale) & ~1;
-        const safeHeight = Math.round(img.height * scale) & ~1;
-
-        const canvas = document.createElement("canvas");
-        canvas.width = safeWidth;
-        canvas.height = safeHeight;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Could not get canvas context");
-        
-        ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, safeWidth, safeHeight);
-        const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
-
-        // subsample: 0 ensures YUV444 which avoids chroma subsampling crashes
-        const _options = { ...defaultOptions, quality, subsample: 0 };
-        const pixelData = new Uint8Array(
-          imageData.data.buffer,
-          imageData.data.byteOffset,
-          imageData.data.byteLength
-        );
-
-        // Encode to AVIF
-        const output = emscriptenModule.encode(pixelData, safeWidth, safeHeight, _options);
-        if (!output) {
-          throw new Error(`AVIF Encoding failed for ${file.name}. Image might be too complex or large for browser memory.`);
-        }
-        const avifBuffer = output.buffer;
-        
-        const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-        const safeName = fileNameWithoutExt.replace(/[^\x20-\x7E]/g, "_");
-        
-        zip.file(`${safeName}.avif`, avifBuffer);
+        // Send the untouched original file directly to the server for maximum quality AVIF encoding
+        formData.append("images", file);
       }
 
-      const zipBlob = await zip.generateAsync({ type: "blob" });
-      const downloadUrl = window.URL.createObjectURL(zipBlob);
+      formData.append("quality", quality.toString());
+
+      const response = await fetch("/api/compress", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to compress images on server");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
       
       const a = document.createElement("a");
       a.href = downloadUrl;

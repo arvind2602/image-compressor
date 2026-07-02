@@ -269,57 +269,27 @@ export default function CropTool() {
         img.onerror = reject;
       });
 
-      // AVIF YUV420 encoding requires even dimensions.
-      const safeWidth = crop.width & ~1;
-      const safeHeight = crop.height & ~1;
+      const formData = new FormData();
+      // Send the original, pristine image file along with the crop coordinates.
+      // The server will handle the precise cropping and high-quality AVIF conversion.
+      formData.append("image", imageFile);
+      formData.append("left", crop.left.toString());
+      formData.append("top", crop.top.toString());
+      formData.append("width", crop.width.toString());
+      formData.append("height", crop.height.toString());
+      formData.append("quality", quality.toString());
 
-      const canvas = document.createElement("canvas");
-      canvas.width = safeWidth;
-      canvas.height = safeHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Could not get canvas context");
-
-      // Draw the cropped portion
-      ctx.drawImage(
-        img,
-        crop.left,
-        crop.top,
-        safeWidth,
-        safeHeight,
-        0,
-        0,
-        safeWidth,
-        safeHeight
-      );
-
-      const imageData = ctx.getImageData(0, 0, safeWidth, safeHeight);
-
-      // Force single-threaded mode to avoid Web Worker / SharedArrayBuffer issues
-      const { default: avifEncoder } = await import("@jsquash/avif/codec/enc/avif_enc.js");
-      const { initEmscriptenModule } = await import("@jsquash/avif/utils.js");
-      const { defaultOptions } = await import("@jsquash/avif/meta.js");
-
-      // Initialize the module directly
-      const emscriptenModule = await initEmscriptenModule(avifEncoder, undefined, { 
-        locateFile: (path: string) => `/wasm/${path}` 
+      const response = await fetch("/api/crop", {
+        method: "POST",
+        body: formData,
       });
 
-      // subsample: 0 ensures YUV444 which avoids chroma subsampling crashes
-      const _options = { ...defaultOptions, quality, subsample: 0 };
-      
-      // We must slice the buffer to avoid passing a view over a larger ArrayBuffer if byteOffset > 0
-      const pixelData = new Uint8Array(
-        imageData.data.buffer, 
-        imageData.data.byteOffset, 
-        imageData.data.byteLength
-      );
-      
-      const output = emscriptenModule.encode(pixelData, safeWidth, safeHeight, _options);
-      if (!output) {
-        throw new Error("AVIF Encoding failed internally. Image might be too complex or large for browser memory.");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to crop image");
       }
-      const avifBuffer = output.buffer;
-      const blob = new Blob([avifBuffer], { type: "image/avif" });
+
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
