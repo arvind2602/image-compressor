@@ -182,7 +182,7 @@ export default function CropTool() {
     if (!imageUrl || !cropContainerRef.current) return;
 
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    const newZoom = Math.max(0.1, Math.min(5, Math.round((zoom + delta) * 100) / 100));
+    const newZoom = Math.max(0, Math.min(5, Math.round((zoom + delta) * 100) / 100));
 
     const rect = cropContainerRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -199,7 +199,7 @@ export default function CropTool() {
   };
 
   const handleZoomChange = (newZoom: number) => {
-    const clampedZoom = Math.max(0.1, Math.min(5, newZoom));
+    const clampedZoom = Math.max(0, Math.min(5, newZoom));
     const zoomRatio = clampedZoom / zoom;
     const containerW = cropContainerRef.current?.clientWidth || 0;
     const containerH = containerW * (currentRatio.h / currentRatio.w);
@@ -254,10 +254,10 @@ export default function CropTool() {
     const containerH = containerW * (currentRatio.h / currentRatio.w);
 
     const crop = {
-      left: Math.round(Math.max(0, -offsetX / zoom)),
-      top: Math.round(Math.max(0, -offsetY / zoom)),
-      width: Math.round(Math.min(imageNaturalSize.w, containerW / zoom)),
-      height: Math.round(Math.min(imageNaturalSize.h, containerH / zoom)),
+      left: Math.round(Math.max(0, -offsetX / (zoom || 0.001))),
+      top: Math.round(Math.max(0, -offsetY / (zoom || 0.001))),
+      width: Math.round(Math.min(imageNaturalSize.w, containerW / (zoom || 0.001))),
+      height: Math.round(Math.min(imageNaturalSize.h, containerH / (zoom || 0.001))),
     };
 
     try {
@@ -582,7 +582,7 @@ export default function CropTool() {
               <div className="flex items-center gap-2 mb-2">
                 <button
                   onClick={() => handleZoomChange(Math.round((zoom - 0.01) * 100) / 100)}
-                  disabled={zoom <= 0.1}
+                  disabled={zoom <= 0}
                   className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
@@ -600,7 +600,7 @@ export default function CropTool() {
               </div>
               <input
                 type="range"
-                min={10}
+                min={0}
                 max={500}
                 value={Math.round(zoom * 100)}
                 onChange={(e) =>
@@ -609,7 +609,7 @@ export default function CropTool() {
                 className="styled-range w-full"
                 style={
                   {
-                    "--range-progress": `${((Math.round(zoom * 100) - 10) / (500 - 10)) * 100}%`,
+                    "--range-progress": `${((Math.round(zoom * 100) - 0) / (500 - 0)) * 100}%`,
                   } as React.CSSProperties
                 }
               />
