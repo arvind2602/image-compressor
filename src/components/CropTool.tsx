@@ -54,6 +54,20 @@ export default function CropTool() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const changeFileInputRef = useRef<HTMLInputElement>(null);
   const editorWrapperRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const preventNativeZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    // Must be non-passive to allow preventDefault()
+    el.addEventListener("wheel", preventNativeZoom, { passive: false });
+    return () => el.removeEventListener("wheel", preventNativeZoom);
+  }, []);
 
   useEffect(() => {
     if (imageUrl && editorWrapperRef.current) {
@@ -108,17 +122,30 @@ export default function CropTool() {
   }, [fitImageToContainer]);
 
   const clampOffset = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, currentZoom: number = zoom) => {
       if (!cropContainerRef.current) return { x, y };
       const containerW = cropContainerRef.current.clientWidth;
       const containerH = containerW * (currentRatio.h / currentRatio.w);
-      const imgW = imageNaturalSize.w * zoom;
-      const imgH = imageNaturalSize.h * zoom;
+      const imgW = imageNaturalSize.w * currentZoom;
+      const imgH = imageNaturalSize.h * currentZoom;
 
-      const minX = Math.min(0, containerW - imgW);
-      const maxX = Math.max(0, containerW - imgW);
-      const minY = Math.min(0, containerH - imgH);
-      const maxY = Math.max(0, containerH - imgH);
+      let minX, maxX;
+      if (imgW < containerW) {
+        minX = (containerW - imgW) / 2;
+        maxX = minX;
+      } else {
+        minX = containerW - imgW;
+        maxX = 0;
+      }
+
+      let minY, maxY;
+      if (imgH < containerH) {
+        minY = (containerH - imgH) / 2;
+        maxY = minY;
+      } else {
+        minY = containerH - imgH;
+        maxY = 0;
+      }
 
       const clampedX = Math.max(minX, Math.min(maxX, x));
       const clampedY = Math.max(minY, Math.min(maxY, y));
@@ -188,11 +215,11 @@ export default function CropTool() {
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const zoomRatio = newZoom / zoom;
+    const zoomRatio = newZoom / (zoom || 0.001);
     const newX = mouseX - zoomRatio * (mouseX - offsetX);
     const newY = mouseY - zoomRatio * (mouseY - offsetY);
 
-    const clamped = clampOffset(newX, newY);
+    const clamped = clampOffset(newX, newY, newZoom);
     setZoom(newZoom);
     setOffsetX(clamped.x);
     setOffsetY(clamped.y);
@@ -200,12 +227,12 @@ export default function CropTool() {
 
   const handleZoomChange = (newZoom: number) => {
     const clampedZoom = Math.max(0, Math.min(5, newZoom));
-    const zoomRatio = clampedZoom / zoom;
+    const zoomRatio = clampedZoom / (zoom || 0.001);
     const containerW = cropContainerRef.current?.clientWidth || 0;
     const containerH = containerW * (currentRatio.h / currentRatio.w);
     const newX = zoomRatio * offsetX + (containerW * (1 - zoomRatio)) / 2;
     const newY = zoomRatio * offsetY + (containerH * (1 - zoomRatio)) / 2;
-    const clamped = clampOffset(newX, newY);
+    const clamped = clampOffset(newX, newY, clampedZoom);
     setZoom(clampedZoom);
     setOffsetX(clamped.x);
     setOffsetY(clamped.y);
@@ -365,6 +392,7 @@ export default function CropTool() {
           <div className="flex-1 min-w-0 flex flex-col gap-5">
             {/* Outer Wrapper Canvas */}
             <div
+              ref={viewportRef}
               className="relative w-full bg-[#0a0a0c] rounded-2xl overflow-hidden p-4 sm:p-12 lg:p-20 flex flex-col items-center justify-center group/viewport border border-white/[0.04] shadow-inner focus:outline-none focus:ring-2 focus:ring-accent/50"
               tabIndex={0}
               onMouseDown={handleMouseDown}
@@ -422,7 +450,7 @@ export default function CropTool() {
 
               {/* Zoom badge (moved to wrapper so it's always in corner) */}
               <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[11px] text-text-tertiary font-mono pointer-events-none border border-white/[0.06] z-20">
-                {Math.round(zoom * 100)}%
+                {(zoom * 100).toFixed(2)}%
               </div>
 
               {/* Help hint (moved to wrapper) */}
@@ -581,17 +609,17 @@ export default function CropTool() {
               </div>
               <div className="flex items-center gap-2 mb-2">
                 <button
-                  onClick={() => handleZoomChange(Math.round((zoom - 0.01) * 100) / 100)}
+                  onClick={() => handleZoomChange(Math.round((zoom - 0.0005) * 10000) / 10000)}
                   disabled={zoom <= 0}
                   className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
                 <div className="flex-1 text-center text-sm text-text-secondary font-mono tabular-nums">
-                  {Math.round(zoom * 100)}%
+                  {(zoom * 100).toFixed(2)}%
                 </div>
                 <button
-                  onClick={() => handleZoomChange(Math.round((zoom + 0.01) * 100) / 100)}
+                  onClick={() => handleZoomChange(Math.round((zoom + 0.0005) * 10000) / 10000)}
                   disabled={zoom >= 5}
                   className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
@@ -602,14 +630,15 @@ export default function CropTool() {
                 type="range"
                 min={0}
                 max={500}
-                value={Math.round(zoom * 100)}
+                step={0.01}
+                value={(zoom * 100).toFixed(2)}
                 onChange={(e) =>
-                  handleZoomChange(parseInt(e.target.value) / 100)
+                  handleZoomChange(parseFloat(e.target.value) / 100)
                 }
                 className="styled-range w-full"
                 style={
                   {
-                    "--range-progress": `${((Math.round(zoom * 100) - 0) / (500 - 0)) * 100}%`,
+                    "--range-progress": `${(((zoom * 100) - 0) / (500 - 0)) * 100}%`,
                   } as React.CSSProperties
                 }
               />
