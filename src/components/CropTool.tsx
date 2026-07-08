@@ -321,11 +321,10 @@ export default function CropTool() {
       {!imageUrl ? (
         /* ─── Dropzone ─── */
         <div
-          className={`relative rounded-xl p-14 flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer group border-2 border-dashed ${
-            isDragging
+          className={`relative rounded-xl p-14 flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer group border-2 border-dashed ${isDragging
               ? "border-accent bg-accent/[0.08] scale-[1.01]"
               : "border-white/[0.08] hover:border-accent/40 hover:bg-white/[0.02]"
-          }`}
+            }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -339,18 +338,16 @@ export default function CropTool() {
             onChange={handleFileChange}
           />
           <div
-            className={`mb-5 p-4 rounded-2xl transition-all duration-500 ${
-              isDragging
+            className={`mb-5 p-4 rounded-2xl transition-all duration-500 ${isDragging
                 ? "bg-accent/20 scale-110 animate-pulse-glow"
                 : "bg-white/[0.04] group-hover:bg-accent/10 group-hover:scale-105"
-            }`}
+              }`}
           >
             <UploadCloud
-              className={`w-12 h-12 transition-all duration-300 ${
-                isDragging
+              className={`w-12 h-12 transition-all duration-300 ${isDragging
                   ? "text-accent"
                   : "text-text-tertiary group-hover:text-accent"
-              }`}
+                }`}
             />
           </div>
           <p className="text-text-primary font-semibold text-lg mb-1.5">
@@ -382,9 +379,8 @@ export default function CropTool() {
                 style={{
                   aspectRatio: `${currentRatio.w} / ${currentRatio.h}`,
                 }}
-                className={`w-full relative transition-all select-none ${
-                  isDraggingImage ? "ring-accent/70 ring-2" : "ring-white/[0.15] ring-1"
-                }`}
+                className={`w-full relative transition-all select-none ${isDraggingImage ? "ring-accent/70 ring-2" : "ring-white/[0.15] ring-1"
+                  }`}
               >
                 {/* Image */}
                 <img
@@ -395,9 +391,8 @@ export default function CropTool() {
                     transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
                     transformOrigin: "0 0",
                   }}
-                  className={`absolute top-0 left-0 max-w-none transition-transform duration-75 ${
-                    isDraggingImage ? "cursor-grabbing" : "cursor-grab"
-                  }`}
+                  className={`absolute top-0 left-0 max-w-none transition-transform duration-75 ${isDraggingImage ? "cursor-grabbing" : "cursor-grab"
+                    }`}
                 />
 
                 {/* Dark Mask for cut-off parts using box-shadow */}
@@ -443,11 +438,10 @@ export default function CropTool() {
               <button
                 onClick={handleCrop}
                 disabled={isProcessing}
-                className={`group/btn relative w-full max-w-md h-12 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2.5 overflow-hidden transition-all duration-300 ${
-                  isProcessing
+                className={`group/btn relative w-full max-w-md h-12 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2.5 overflow-hidden transition-all duration-300 ${isProcessing
                     ? "bg-accent/40 cursor-not-allowed"
                     : "bg-gradient-to-r from-violet-600 via-accent to-purple-700 hover:shadow-[0_0_24px_rgba(124,58,237,0.45)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
-                }`}
+                  }`}
               >
                 {/* Shimmer overlay */}
                 {!isProcessing && (
@@ -502,18 +496,16 @@ export default function CropTool() {
                   <button
                     key={preset.label}
                     onClick={() => setSelectedRatio(preset.label)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      selectedRatio === preset.label
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedRatio === preset.label
                         ? "bg-accent/15 text-accent border border-accent/30 scale-[1.02]"
                         : "text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] border border-transparent"
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`rounded shrink-0 transition-all duration-200 ${
-                        selectedRatio === preset.label
+                      className={`rounded shrink-0 transition-all duration-200 ${selectedRatio === preset.label
                           ? "border-accent"
                           : "border-white/[0.15]"
-                      }`}
+                        }`}
                       style={{
                         width: getRatioDimensions(preset.w, preset.h, 12).w,
                         height: getRatioDimensions(preset.w, preset.h, 12).h,
@@ -525,11 +517,10 @@ export default function CropTool() {
                 ))}
                 <button
                   onClick={() => setSelectedRatio("custom")}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    selectedRatio === "custom"
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${selectedRatio === "custom"
                       ? "bg-accent/15 text-accent border border-accent/30 scale-[1.02]"
                       : "text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] border border-transparent"
-                  }`}
+                    }`}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
                   Custom
@@ -590,7 +581,7 @@ export default function CropTool() {
               </div>
               <div className="flex items-center gap-2 mb-2">
                 <button
-                  onClick={() => handleZoomChange(Math.round((zoom - 0.1) * 100) / 100)}
+                  onClick={() => handleZoomChange(Math.round((zoom - 0.01) * 100) / 100)}
                   disabled={zoom <= 0.1}
                   className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
@@ -600,7 +591,7 @@ export default function CropTool() {
                   {Math.round(zoom * 100)}%
                 </div>
                 <button
-                  onClick={() => handleZoomChange(Math.round((zoom + 0.1) * 100) / 100)}
+                  onClick={() => handleZoomChange(Math.round((zoom + 0.01) * 100) / 100)}
                   disabled={zoom >= 5}
                   className="p-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.08] disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
                 >
