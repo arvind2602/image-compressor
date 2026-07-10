@@ -287,7 +287,7 @@ export default function CropTool() {
     };
 
     try {
-      // Create a canvas to crop the image client-side to save upload bandwidth and avoid Vercel 4.5MB limit
+      // Create a canvas to crop the image entirely client-side
       const img = new window.Image();
       img.src = imageUrl;
       await new Promise((resolve, reject) => {
@@ -295,47 +295,59 @@ export default function CropTool() {
         img.onerror = reject;
       });
 
-      const formData = new FormData();
-      // Send the original, pristine image file along with the crop coordinates.
-      // The server will handle the precise cropping and high-quality AVIF conversion.
-      formData.append("image", imageFile);
-      formData.append("left", crop.left.toString());
-      formData.append("top", crop.top.toString());
-      formData.append("width", crop.width.toString());
-      formData.append("height", crop.height.toString());
-      formData.append("quality", quality.toString());
+      const canvas = document.createElement("canvas");
+      canvas.width = crop.width;
+      canvas.height = crop.height;
+      const ctx = canvas.getContext("2d");
+      
+      if (!ctx) throw new Error("Could not get canvas context");
+      
+      // Draw the cropped portion to the canvas
+      ctx.drawImage(
+        img,
+        crop.left,
+        crop.top,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        crop.width,
+        crop.height
+      );
 
-      const response = await fetch("/api/crop", {
-        method: "POST",
-        body: formData,
-      });
+      // Convert to WebP locally
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            setIsProcessing(false);
+            showToast("Failed to create image blob");
+            return;
+          }
+          
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          const fileNameWithoutExt =
+            imageFile.name.substring(0, imageFile.name.lastIndexOf(".")) ||
+            imageFile.name;
+          a.download = `${fileNameWithoutExt}_cropped.webp`;
+          document.body.appendChild(a);
+          a.click();
+          URL.revokeObjectURL(url);
+          a.remove();
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to crop image");
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const fileNameWithoutExt =
-        imageFile.name.substring(0, imageFile.name.lastIndexOf(".")) ||
-        imageFile.name;
-      a.download = `${fileNameWithoutExt}_cropped.avif`;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-      a.remove();
-
-      showToast(
-        `Cropped! ${formatFileSize(imageFile.size)} ➔ ${formatFileSize(blob.size)}`,
-        "success"
+          showToast(
+            `Cropped! ${formatFileSize(imageFile.size)} ➔ ${formatFileSize(blob.size)}`,
+            "success"
+          );
+          setIsProcessing(false);
+        },
+        "image/webp",
+        quality / 100
       );
     } catch (error: any) {
       console.error(error);
       showToast(error.message || "Something went wrong while processing the image.");
-    } finally {
       setIsProcessing(false);
     }
   };

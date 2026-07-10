@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -22,15 +28,16 @@ export async function POST(req: NextRequest) {
       image.name.substring(0, image.name.lastIndexOf(".")) || image.name;
     const safeName = fileNameWithoutExt.replace(/[^\x20-\x7E]/g, "_");
 
-    const avifBuffer = await sharp(buffer)
+    // Use WebP with effort 0 for speed. AVIF effort 4 was the main bottleneck.
+    const outputBuffer = await sharp(buffer)
       .extract({ left, top, width, height })
-      .avif({ quality, effort: 4 })
+      .webp({ quality, effort: 0 })
       .toBuffer();
 
-    return new NextResponse(new Uint8Array(avifBuffer), {
+    return new NextResponse(new Uint8Array(outputBuffer), {
       headers: {
-        "Content-Type": "image/avif",
-        "Content-Disposition": `attachment; filename="${safeName}_cropped.avif"`,
+        "Content-Type": "image/webp",
+        "Content-Disposition": `attachment; filename="${safeName}_cropped.webp"`,
       },
     });
   } catch (error: any) {

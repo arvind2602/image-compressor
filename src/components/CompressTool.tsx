@@ -71,41 +71,71 @@ export default function CompressTool() {
     setIsUploading(true);
 
     try {
-      const formData = new FormData();
+      let compressedCount = 0;
 
       for (const file of files) {
-        // Send the untouched original file directly to the server for maximum quality AVIF encoding
-        formData.append("images", file);
+        await new Promise<void>((resolve, reject) => {
+          const img = new window.Image();
+          const objUrl = URL.createObjectURL(file);
+          img.src = objUrl;
+
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            
+            if (!ctx) {
+              reject(new Error("Could not get canvas context"));
+              return;
+            }
+
+            ctx.drawImage(img, 0, 0);
+
+            canvas.toBlob(
+              (blob) => {
+                URL.revokeObjectURL(objUrl);
+                if (!blob) {
+                  reject(new Error(`Failed to compress ${file.name}`));
+                  return;
+                }
+
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = blobUrl;
+                const fileNameWithoutExt =
+                  file.name.substring(0, file.name.lastIndexOf(".")) ||
+                  file.name;
+                a.download = `${fileNameWithoutExt}_compressed.webp`;
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(blobUrl);
+                a.remove();
+                
+                compressedCount++;
+                resolve();
+              },
+              "image/webp",
+              quality / 100
+            );
+          };
+
+          img.onerror = () => {
+            URL.revokeObjectURL(objUrl);
+            reject(new Error(`Failed to load ${file.name}`));
+          };
+        });
+        
+        // Small delay between processing large files to allow UI to update and garbage collector to run
+        await new Promise((r) => setTimeout(r, 200));
       }
-
-      formData.append("quality", quality.toString());
-
-      const response = await fetch("/api/compress", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to compress images on server");
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = "compressed_images.zip";
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(downloadUrl);
-      a.remove();
 
       // Revoke all thumbnail URLs
       thumbnails.forEach((t) => URL.revokeObjectURL(t));
       setFiles([]);
       setShowSuccess(true);
       showToast(
-        `Compressed ${files.length} file${files.length > 1 ? "s" : ""} successfully`,
+        `Compressed ${compressedCount} file${compressedCount > 1 ? "s" : ""} successfully`,
         "success"
       );
       setTimeout(() => setShowSuccess(false), 4000);
